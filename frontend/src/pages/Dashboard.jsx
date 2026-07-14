@@ -93,7 +93,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-6 mb-8">
         {/* Monthly Volume Line Chart */}
         <div className="card col-span-1">
-          <h3 className="h4 mb-6">Review Volume </h3>
+          <h3 className="h4 mb-6">Review Volume</h3>
           <div style={{ height: 300 }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={monthly}>
