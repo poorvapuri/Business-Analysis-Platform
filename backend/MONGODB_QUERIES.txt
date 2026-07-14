@@ -1,0 +1,437 @@
+================================================================================
+                        MONGODB QUERIES REFERENCE
+                 Business Analytics - Review Lens Application
+================================================================================
+
+DATABASE: reviewlens
+COLLECTIONS: businesses, reviews, users
+
+
+================================================================================
+1. SETUP & INITIALIZATION (setupDb.js)
+================================================================================
+
+-- Drop Collections --
+db.businesses.drop()
+db.reviews.drop()
+db.users.drop()
+
+-- Create Collections --
+db.createCollection('businesses')
+db.createCollection('reviews')
+db.createCollection('users')
+
+-- Index Creation: Businesses --
+db.businesses.createIndex({ location: '2dsphere' })
+db.businesses.createIndex({ name: 'text' })
+db.businesses.createIndex({ city: 1 })
+db.businesses.createIndex({ business_id: 1 }, { unique: true })
+db.businesses.createIndex({ categories: 1 })
+
+-- Index Creation: Reviews --
+db.reviews.createIndex({ text: 'text' })
+db.reviews.createIndex({ city: 1, stars: -1, date: -1 })
+db.reviews.createIndex({ business_id: 1 })
+db.reviews.createIndex({ user_id: 1 })
+db.reviews.createIndex({ date: -1 })
+
+-- Index Creation: Users --
+db.users.createIndex({ user_id: 1 }, { unique: true })
+
+
+================================================================================
+2. DATA IMPORT (importYelp.js)
+================================================================================
+
+-- Insert Many Documents (Batch) --
+db.businesses.insertMany([documents], { ordered: false })
+db.users.insertMany([documents], { ordered: false })
+db.reviews.insertMany([documents], { ordered: false })
+
+Note: Errors with code 11000 (duplicate key) are ignored for resumable imports
+
+
+================================================================================
+3. SYNCHRONIZATION (syncCounts.js)
+================================================================================
+
+-- Aggregate Review Counts by Business --
+db.reviews.aggregate([
+    { $group: { _id: '$business_id', count: { $sum: 1 } } }
+])
+
+-- Update Business Review Count --
+db.businesses.updateOne(
+    { business_id: <business_id> },
+    { $set: { review_count: <count> } }
+)
+
+-- Aggregate Review Counts by User --
+db.reviews.aggregate([
+    { $group: { _id: '$user_id', count: { $sum: 1 } } }
+])
+
+-- Update User Review Count --
+db.users.updateOne(
+    { user_id: <user_id> },
+    { $set: { review_count: <count> } }
+)
+
+
+================================================================================
+4. ANALYTICS ROUTES (routes/analytics.js)
+================================================================================
+
+-- Get Overview Statistics --
+db.businesses.countDocuments()
+db.reviews.countDocuments()
+db.users.countDocuments()
+
+db.businesses.aggregate([
+    { $group: { _id: null, avgStars: { $avg: "$stars" } } }
+])
+
+-- Get Trending Businesses (Last 90 Days) --
+db.reviews.find().sort({ date: -1 }).limit(1)
+
+db.reviews.aggregate([
+    { $match: { date: { $gte: <priorDate>, $lte: <now> } } },
+    {
+        $group: {
+            _id: { business_id: "$business_id", business_name: "$business_name" },
+            recentCount: { $sum: { $cond: [{ $gte: ["$date", <recentDate>] }, 1, 0] } },
+            priorCount: { $sum: { $cond: [{ $lt: ["$date", <recentDate>] }, 1, 0] } }
+        }
+    },
+    {
+        $addFields: {
+            growth: { $subtract: ["$recentCount", "$priorCount"] }
+        }
+    },
+    {
+        $facet: {
+            topTrending: [
+                { $sort: { growth: -1 } },
+                { $limit: 10 }
+            ],
+            topDeclining: [
+                { $sort: { growth: 1 } },
+                { $limit: 10 }
+            ]
+        }
+    }
+])
+
+-- Get Category Breakdown by City --
+db.businesses.aggregate([
+    { $match: { city: /^<city>$/i } },
+    { $unwind: "$categories" },
+    {
+        $group: {
+            _id: "$categories",
+            businessCount: { $sum: 1 },
+            averageStars: { $avg: "$stars" },
+            totalReviews: { $sum: "$review_count" }
+        }
+    },
+    { $sort: { businessCount: -1 } },
+    { $limit: 15 }
+])
+
+-- Get Star Distribution by City --
+db.businesses.aggregate([
+    { $match: { city: /^<city>$/i } },
+    {
+        $match: {
+            $expr: {
+                $in: [
+                    { $type: "$stars" },
+                    ["int", "double", "long", "decimal"]
+                ]
+            }
+        }
+    },
+    {
+        $bucket: {
+            groupBy: "$stars",
+            boundaries: [1, 2, 3, 4, 5, 6],
+            default: "Other",
+            output: {
+                count: { $sum: 1 },
+                averageReviews: { $avg: "$review_count" }
+            }
+        }
+    }
+])
+
+
+================================================================================
+5. BUSINESSES ROUTES (routes/businesses.js)
+================================================================================
+
+-- Search Businesses (Paginated) --
+db.businesses.find({
+    $and: [
+        { city: /^<city>$/i },
+        { categories: { $elemMatch: { $regex: /^<category>$/i } } },
+        {
+            $or: [
+                { stars: { $gte: <minStars> } },
+                { review_count: { $gte: <minReviews> } }
+            ]
+        }
+    ]
+})
+.sort({ stars: -1, review_count: -1 })
+.skip(<skip>)
+.limit(<limit>)
+
+-- Count Total Matching Businesses --
+db.businesses.countDocuments({
+    $and: [...]
+})
+
+-- Find Businesses Open Today --
+db.businesses.find({
+    'hours.<DayOfWeek>': { $exists: true, $ne: "" }
+})
+.limit(20)
+
+-- Get Business by ID --
+db.businesses.findOne({ business_id: <business_id> })
+
+-- Get Reviews for Business --
+db.reviews.find({ business_id: <business_id> })
+.sort({ date: -1 })
+.limit(20)
+
+
+================================================================================
+6. REVIEWS ROUTES (routes/reviews.js)
+================================================================================
+
+-- Get Sentiment Breakdown by City --
+db.reviews.aggregate([
+    { $match: { city: /^<city>$/i } },
+    {
+        $project: {
+            sentiment: {
+                $switch: {
+                    branches: [
+                        { case: { $gte: ["$stars", 4] }, then: "Positive" },
+                        { case: { $eq: ["$stars", 3] }, then: "Neutral" },
+                        { case: { $lte: ["$stars", 2] }, then: "Negative" }
+                    ],
+                    default: "Unknown"
+                }
+            }
+        }
+    },
+    {
+        $group: {
+            _id: "$sentiment",
+            count: { $sum: 1 }
+        }
+    }
+])
+
+-- Get Hourly Review Activity --
+db.reviews.aggregate([
+    {
+        $group: {
+            _id: { $hour: "$date" },
+            count: { $sum: 1 }
+        }
+    },
+    { $sort: { _id: 1 } }
+])
+
+-- Create New Review --
+db.reviews.insertOne({
+    review_id: <uuid>,
+    user_id: <user_id>,
+    business_id: <business_id>,
+    stars: <stars>,
+    text: <text>,
+    useful: 0,
+    funny: 0,
+    cool: 0,
+    date: new Date()
+})
+
+-- Increment Business Review Count --
+db.businesses.updateOne(
+    { business_id: <business_id> },
+    { $inc: { review_count: 1 } }
+)
+
+-- Add Helpful Vote to Review --
+db.reviews.updateOne(
+    { review_id: <review_id> },
+    { $inc: { [<voteType>]: 1 } }
+)
+where <voteType> can be: useful, funny, or cool
+
+
+================================================================================
+7. GEO ROUTES (routes/geo.js)
+================================================================================
+
+-- Find Nearby Businesses (Geospatial Query) --
+db.businesses.find({
+    location: {
+        $nearSphere: {
+            $geometry: {
+                type: "Point",
+                coordinates: [<lng>, <lat>]
+            },
+            $maxDistance: <radiusInMeters>
+        }
+    },
+    categories: /^<category>$/i,
+    stars: { $gte: <minStars> }
+})
+.limit(50)
+
+-- Get Cities with Statistics --
+db.businesses.aggregate([
+    {
+        $group: {
+            _id: "$city",
+            businessCount: { $sum: 1 },
+            averageStars: { $avg: "$stars" }
+        }
+    },
+    { $sort: { businessCount: -1 } },
+    { $limit: 20 }
+])
+
+
+================================================================================
+8. USERS ROUTES (routes/users.js)
+================================================================================
+
+-- Get Top Influencers with Scoring --
+db.users.aggregate([
+    {
+        $lookup: {
+            from: 'reviews',
+            localField: 'user_id',
+            foreignField: 'user_id',
+            as: 'city_reviews'
+        }
+    },
+    { $match: { 'city_reviews.city': /^<city>$/i } },
+    { $project: { city_reviews: 0 } },
+    {
+        $addFields: {
+            influenceScore: {
+                $add: [
+                    { $multiply: ["$useful", 3] },
+                    { $multiply: ["$funny", 1] },
+                    { $multiply: ["$review_count", 0.5] }
+                ]
+            }
+        }
+    },
+    { $sort: { influenceScore: -1 } },
+    { $limit: <limit> }
+])
+
+Influence Score Formula: (useful × 3) + (funny × 1) + (review_count × 0.5)
+
+-- Update User Profile (with Rename) --
+db.users.updateOne(
+    { user_id: <user_id> },
+    {
+        $set: { <field>: <value> },
+        $rename: { name: 'full_name' }
+    }
+)
+
+
+================================================================================
+KEY QUERY PATTERNS & TECHNIQUES
+================================================================================
+
+1. GEOSPATIAL QUERIES ($nearSphere, $maxDistance)
+   - Used for finding nearby businesses
+   - Requires: 2dsphere index on location field
+   - Returns results sorted by distance
+
+2. TEXT SEARCH (text index)
+   - Indexes: businesses.name, reviews.text
+   - Use for full-text search capabilities
+
+3. AGGREGATION PIPELINE
+   - $match: Filter documents
+   - $group: Group and aggregate
+   - $sort: Sort results
+   - $limit: Limit output
+   - $unwind: Flatten arrays
+   - $lookup: Join collections
+   - $addFields: Add computed fields
+   - $project: Select/exclude fields
+   - $bucket: Group into categories
+   - $facet: Multiple parallel aggregations
+
+4. UPDATE OPERATORS
+   - $set: Set field values
+   - $inc: Increment numeric fields
+   - $rename: Rename fields
+
+5. ARRAY OPERATIONS
+   - $elemMatch: Match array elements
+   - $all: All array values match
+   - $unwind: Flatten arrays
+   - $in, $nin: Array membership
+
+6. CONDITIONAL LOGIC
+   - $cond: IF-THEN-ELSE expressions
+   - $switch: CASE-LIKE statements
+
+7. REGULAR EXPRESSIONS
+   - /^<pattern>$/i: Case-insensitive matching
+   - Used for city names, categories, text search
+
+8. PAGINATION
+   - skip((page - 1) * limit)
+   - limit(n)
+   - Essential for large result sets
+
+9. BATCH OPERATIONS
+   - insertMany with { ordered: false }
+   - Ignores duplicate key errors for resumable imports
+   - Used during Yelp data import
+
+
+================================================================================
+FIELD STRUCTURE REFERENCE
+================================================================================
+
+BUSINESSES Collection:
+- business_id (unique)
+- name (text indexed)
+- address, city, state, postal_code
+- location (2dsphere indexed): { type: "Point", coordinates: [lng, lat] }
+- stars, review_count, is_open
+- attributes, categories (array), hours
+
+REVIEWS Collection:
+- review_id (unique)
+- user_id, business_id
+- stars, text (text indexed), date
+- useful, funny, cool (votes)
+- city (denormalized), business_name (denormalized)
+
+USERS Collection:
+- user_id (unique)
+- name (or full_name), review_count
+- useful, funny, cool (aggregate votes)
+- elite, friends, fans
+- average_stars, yelping_since
+
+
+================================================================================
+END OF MONGODB QUERIES REFERENCE
+================================================================================
