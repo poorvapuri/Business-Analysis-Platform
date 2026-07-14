@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { fetchNearby } from '../services/api';
 import { MapPin, Navigation, Star, Store, Code } from 'lucide-react';
 
@@ -13,8 +13,13 @@ const PRESETS = [
 export default function GeoSearch() {
   const [params, setParams] = useState({ lat: '', lng: '', radius: 5000, category: '', minStars: '' });
   const [results, setResults] = useState([]);
-  const [mongoQuery, setMongoQuery] = useState(null);
+  const [sqlQuery, setSqlQuery] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const limit = 10;
+  const totalPages = Math.ceil(results.length / limit) || 1;
+  const paginatedResults = results.slice((page - 1) * limit, page * limit);
+  useEffect(() => { setPage(1); }, [results]);
 
   const handleParamChange = (e) => {
       const { name, value } = e.target;
@@ -31,7 +36,7 @@ export default function GeoSearch() {
       try {
           const res = await fetchNearby(params);
           setResults(res.data || []);
-          setMongoQuery(res.queryExecuted);
+          setSqlQuery(res.queryExecuted);
       } catch (err) {
           console.error(err);
       } finally {
@@ -93,19 +98,17 @@ export default function GeoSearch() {
                   </button>
               </div>
 
-              {/* Mongo Query Preview */}
-              <div className="card" style={{ backgroundColor: '#000', border: '1px solid #1f2937' }}>
+              {/* SQL Query Preview */}
+              <div className="card" style={{ backgroundColor: '#000', border: '1px solid #1f2937', maxWidth: '100%', overflowX: 'auto' }}>
                   <h3 className="h4 mb-4 text-accent-success flex items-center">
-                      <Code className="mr-2" size={18}/> MongoDB Query Preview
+                      <Code className="mr-2" size={18}/> PostgreSQL Query Preview
                   </h3>
-                  {mongoQuery ? (
+                  {sqlQuery ? (
                       <pre style={{ margin: 0, padding: '1rem', backgroundColor: '#111827', borderRadius: '4px', overflowX: 'auto', fontSize: '13px', color: '#a78bfa' }}>
-{`db.businesses.find(
-${JSON.stringify(mongoQuery, null, 2)}
-)`}
+{sqlQuery}
                       </pre>
                   ) : (
-                      <p className="text-muted text-sm italic">Run a search to see the underlying query.</p>
+                      <p className="text-muted text-sm italic">Run a search to see the generated SQL query.</p>
                   )}
               </div>
           </div>
@@ -116,7 +119,7 @@ ${JSON.stringify(mongoQuery, null, 2)}
                   <h3 className="h4 mb-6">Nearby Businesses ({results.length} found)</h3>
                   
                   {loading ? (
-                      <div>Searching the 2dsphere index...</div>
+                      <div>Searching the index...</div>
                   ) : results.length === 0 ? (
                       <div className="text-center text-muted mt-12 py-12 border border-dashed border-[rgba(255,255,255,0.1)] rounded">
                           <MapPin size={48} className="mx-auto mb-4 opacity-50" />
@@ -124,8 +127,9 @@ ${JSON.stringify(mongoQuery, null, 2)}
                           <p className="text-sm mt-2">Try a city preset or increase the search radius.</p>
                       </div>
                   ) : (
-                      <div className="grid gap-4">
-                          {results.map(b => (
+                      <>
+                        <div className="grid gap-4">
+                          {paginatedResults.map(b => (
                               <div key={b.business_id} className="p-4 rounded border border-[rgba(255,255,255,0.05)] bg-bg-primary flex justify-between items-start hover:border-accent-primary transition-colors">
                                   <div>
                                       <h4 className="font-bold h4 mb-1 flex items-center">
@@ -144,12 +148,18 @@ ${JSON.stringify(mongoQuery, null, 2)}
                                           <span className="font-bold text-lg">{b.stars}</span>
                                       </div>
                                       <span className="text-muted text-sm">{b.review_count} reviews</span>
-                                      {/* Example calculation, actual dist requires aggregation or client-side math */}
                                       <p className="text-xs text-accent-success object-right mt-2">Within radius</p>
                                   </div>
                               </div>
                           ))}
-                      </div>
+                        </div>
+                        {/* Pagination Controls */}
+                        <div className="flex justify-center items-center mt-4 gap-4">
+                            <button className="btn btn-outline" onClick={() => setPage(p => Math.max(p - 1, 1))} disabled={page === 1}>Prev</button>
+                            <span>Page {page} of {totalPages}</span>
+                            <button className="btn btn-outline" onClick={() => setPage(p => Math.min(p + 1, totalPages))} disabled={page === totalPages}>Next</button>
+                        </div>
+                      </>
                   )}
               </div>
           </div>
