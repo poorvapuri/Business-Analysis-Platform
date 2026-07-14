@@ -1,8 +1,9 @@
-# Business Analytics Platform (ReviewLens)
+# ReviewLens: A Business Analytics Platform 
 
 A full-stack web application designed to analyze and visualize business data, customer reviews, and influencer metrics. Originally based on the Yelp dataset, this platform provides actionable insights through a modern, responsive dashboard.
 
-## 🚀 Features
+Demo Link: https://business-analysis-platform.vercel.app/
+## Features
 
 *   **Analytics Dashboard:** Visualizes review volumes over time and provides a sentiment breakdown (Positive, Neutral, Negative) using interactive charts.
 *   **Influencer Tracking:** Identifies top reviewers (influencers) based on a custom influence score calculated from their review activity and fan base.
