@@ -8,6 +8,9 @@ export default function Influencers() {
   const [influencers, setInfluencers] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Ensure influencers is always an array
+  const safeInfluencers = Array.isArray(influencers) ? influencers : [];
+
   useEffect(() => {
     loadData();
   }, []);
@@ -33,7 +36,7 @@ export default function Influencers() {
   };
 
   // Find max score for relative visual bar sizing
-  const maxScore = influencers.length > 0 ? influencers[0].influenceScore : 1;
+  const maxScore = safeInfluencers.length > 0 ? safeInfluencers[0].influenceScore : 1;
 
   return (
     <div>
@@ -60,7 +63,7 @@ export default function Influencers() {
           <h3 className="h4 mb-6">Influence Score Ranking</h3>
           <div style={{ height: 300 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={influencers.slice(0, 10)}>
+                    <BarChart data={safeInfluencers.slice(0, 10)}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
                         <XAxis dataKey="name" stroke="#9ca3af" tick={{fill: '#9ca3af'}} />
                         <YAxis stroke="#9ca3af" tick={{fill: '#9ca3af'}} />
@@ -79,43 +82,35 @@ export default function Influencers() {
                       <th style={{ width: '50px' }}>#</th>
                       <th>Name</th>
                       <th>Reviews</th>
-                      <th><span className="flex items-center" title="Useful"><CheckCircle size={14} className="mr-1"/> Useful</span></th>
-                      <th><span className="flex items-center" title="Funny"><Smile size={14} className="mr-1"/> Funny</span></th>
-                      <th>Status</th>
+                      <th>Avg Stars</th>
+                      <th>Fans</th>
                       <th style={{ minWidth: '200px' }}>Score Bar</th>
                   </tr>
               </thead>
               <tbody>
                   {loading ? (
                       <tr><td colSpan="7" className="text-center py-4">Loading influencers...</td></tr>
-                  ) : influencers.map((user, index) => (
+                  ) : safeInfluencers.map((user, index) => (
                       <tr key={user.user_id}>
-                          <td className="font-bold text-muted">{index + 1}</td>
-                          <td className="font-bold">{user.name}</td>
-                          <td>{user.review_count}</td>
-                          <td>{user.useful}</td>
-                          <td>{user.funny}</td>
-                          <td>
-                              {user.elite ? (
-                                  <span className="badge flex items-center" style={{ width: 'fit-content', backgroundColor: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>
-                                      <Award size={12} className="mr-1"/> Elite {user.elite.slice(0, 4)}
-                                  </span>
-                              ) : '-'}
-                          </td>
-                          <td>
-                              <div className="flex items-center w-full">
-                                  <div style={{ flexGrow: 1, height: '8px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
-                                      <div 
-                                        style={{ 
-                                            width: `${(user.influenceScore / maxScore) * 100}%`,
-                                            height: '100%',
-                                            background: 'linear-gradient(to right, #f59e0b, #ef4444)'
-                                        }} 
-                                      />
-                                  </div>
-                                  <span className="ml-3 font-bold text-sm w-12 text-right">{Math.round(user.influenceScore)}</span>
-                              </div>
-                          </td>
+                           <td className="font-bold text-muted">{index + 1}</td>
+                           <td className="font-bold">{user.name}</td>
+                           <td>{user.review_count}</td>
+                           <td>{user.average_stars ? user.average_stars.toFixed(1) : '-'}</td>
+                           <td>{user.fans || 0}</td>
+                           <td>
+                               <div className="flex items-center w-full">
+                                   <div style={{ flexGrow: 1, height: '8px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
+                                       <div 
+                                         style={{ 
+                                             width: `${(user.influenceScore / maxScore) * 100}%`,
+                                             height: '100%',
+                                             background: 'linear-gradient(to right, #f59e0b, #ef4444)'
+                                         }} 
+                                       />
+                                   </div>
+                                   <span className="ml-3 font-bold text-sm w-12 text-right">{Math.round(user.influenceScore)}</span>
+                               </div>
+                           </td>
                       </tr>
                   ))}
               </tbody>

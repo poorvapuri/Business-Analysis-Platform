@@ -47,8 +47,14 @@ export async function fetchStarsDistribution(city = '') {
 }
 
 export async function fetchInfluencers(city = '', limit = 20) {
-    const res = await fetch(`${API_BASE}/users/top-influencers?city=${city}&limit=${limit}`);
-    return res.json();
+  const res = await fetch(`${API_BASE}/users/top-influencers?city=${city}&limit=${limit}`);
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error('Failed to fetch influencers', res.status, errText);
+    throw new Error(`HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 }
 
 export async function fetchCities() {

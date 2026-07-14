@@ -26,7 +26,7 @@ const businessMap = new Map();
  */
 async function upsertBusinesses(rows) {
   if (!rows.length) return;
-  const cols = ['business_id','name','address','city','state','postal_code','latitude','longitude','stars','review_count','categories','hours'];
+  const cols = ['business_id', 'name', 'address', 'city', 'state', 'postal_code', 'latitude', 'longitude', 'stars', 'review_count', 'categories', 'hours'];
   const columnList = cols.map(c => `"${c}"`).join(', ');
   const valuePlaceholders = rows.map((_, i) => {
     const offset = i * cols.length;
@@ -61,8 +61,8 @@ async function processFile(filePath, transformFn, tableName, columns, limit) {
   for await (const line of rl) {
     if (!line.trim()) continue;
     if (limit && ((tableName === 'businesses' && businessCount >= limit) ||
-                  (tableName === 'users' && userCount >= limit) ||
-                  (tableName === 'reviews' && reviewCount >= limit))) {
+      (tableName === 'users' && userCount >= limit) ||
+      (tableName === 'reviews' && reviewCount >= limit))) {
       break;
     }
     try {
@@ -99,7 +99,7 @@ async function processFile(filePath, transformFn, tableName, columns, limit) {
 }
 
 async function importBusinesses() {
-  const cols = ['business_id','name','address','city','state','postal_code','latitude','longitude','stars','review_count','categories','hours'];
+  const cols = ['business_id', 'name', 'address', 'city', 'state', 'postal_code', 'latitude', 'longitude', 'stars', 'review_count', 'categories', 'hours'];
   await processFile(
     path.join(DATA_DIR, 'yelp_academic_dataset_business.json'),
     data => {
@@ -127,7 +127,7 @@ async function importBusinesses() {
 }
 
 async function importUsers() {
-  const cols = ['user_id','name','review_count','average_stars','fans'];
+  const cols = ['user_id', 'name', 'review_count', 'average_stars', 'fans'];
   await processFile(
     path.join(DATA_DIR, 'yelp_academic_dataset_user.json'),
     data => [
@@ -144,7 +144,7 @@ async function importUsers() {
 }
 
 async function importReviews() {
-  const cols = ['review_id','user_id','business_id','stars','text','review_date','city','business_name','search_vector'];
+  const cols = ['review_id', 'user_id', 'business_id', 'stars', 'text', 'review_date', 'city', 'business_name', 'search_vector'];
   await processFile(
     path.join(DATA_DIR, 'yelp_academic_dataset_review.json'),
     data => {
